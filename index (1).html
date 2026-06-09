@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ФармХаб CRM — мок интерфейсов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: 'Manrope', system-ui, sans-serif; background: #F6F7F5; }
+  input, select, button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const Screen_day = (() => {
+const { useState } = React;
+// ─────────────────────────────────────────────────────────────
+// ФармХаб CRM — Экран (а): Рабочий день МОПа
+// Автоплан контактов на день + эскалации бота + прогресс плана.
+// Мок без бэкенда. Дизайн-токены те же, что на экране визита.
+// ─────────────────────────────────────────────────────────────
+
+const C = {
+  bg: "#F6F7F5",
+  surface: "#FFFFFF",
+  ink: "#1C2420",
+  inkSoft: "#5B6660",
+  line: "#E3E7E2",
+  green: "#0E6B5C",
+  greenSoft: "#E3F0ED",
+  bot: "#4B5AE4",
+  botSoft: "#EAEDFC",
+  red: "#C8442C",
+  redSoft: "#FAE9E5",
+  amber: "#B7791F",
+  amberSoft: "#FBF1DF",
+  grey: "#8A948E",
+};
+
+// ── Мок-данные ────────────────────────────────────────────────
+const mop = { name: "Левина Светлана", rop: "Иванов Иван", base: 66, pharmacies: 248 };
+
+// Очередь контактов на день: плановый цикл + эскалации бота + повторы
+const initialQueue = [
+  {
+    id: 1, client: "ИП Прутян Е.В.", cat: "A2", person: "Собственник · Прутян Е.В.",
+    kind: "cycle", channel: "Звонок", reason: "Плановый цикл A2 (21±3 дня). Темп заказа 27% при 42% квартала.",
+    tasks: 5, alarms: 3, score: 71, trend: -3, done: false,
+  },
+  {
+    id: 2, client: "ООО «Эдем»", cat: "A1", person: "Маркетолог · Сидорова К.",
+    kind: "bot", channel: "Звонок", reason: "Эскалация бота: 3 касания без реакции по акциям Q4. Подключено 8 из 44 приглашений.",
+    tasks: 3, alarms: 2, score: 64, trend: -9, done: false,
+  },
+  {
+    id: 3, client: "ИП Комиссарова Л.А.", cat: "B1", person: "Заведующая · Гареева А.Р.",
+    kind: "repeat", channel: "Звонок", reason: "Повтор: на прошлом визите «да» по ОФД, система подключения не видит. Прошлый канал WA — без ответа.",
+    tasks: 2, alarms: 1, score: 58, trend: 0, done: false,
+  },
+  {
+    id: 4, client: "ООО «Центр Фунготерапии»", cat: "B2", person: "Собственник · Филиппов Д.",
+    kind: "cycle", channel: "Звонок", reason: "Плановый цикл B2 (35±3 дня). Зарегистрировать заведующих: 0 из 2 аптек в ФА.",
+    tasks: 4, alarms: 1, score: 49, trend: +2, done: false,
+  },
+  {
+    id: 5, client: "ИП Хабиров Р.М.", cat: "A3", person: "Собственник · Хабиров Р.М.",
+    kind: "bot", channel: "Звонок", reason: "Бот: win-back открыт, клик по ссылке на акции. Тёплый — звонить сегодня.",
+    tasks: 3, alarms: 2, score: 37, trend: +11, done: false,
+  },
+  {
+    id: 6, client: "ООО «Роса»", cat: "C1", person: "Заведующая · Малыгина О.",
+    kind: "cycle", channel: "WhatsApp", reason: "Плановый цикл C1 (60±3 дня). Дистры 1/3, нет якорного.",
+    tasks: 2, alarms: 0, score: 55, trend: +1, done: false,
+  },
+  {
+    id: 7, client: "ИП Шакирова Г.Ф.", cat: "D2", person: "Собственник · Шакирова Г.Ф.",
+    kind: "cycle", channel: "E-mail", reason: "Плановый цикл D2 (90±3 дня). Договор есть, ДС не подписано.",
+    tasks: 2, alarms: 0, score: 41, trend: 0, done: false,
+  },
+];
+
+// Что бот сделал ночью с клиентами ЭТОГО МОПа + реакции
+const botDigest = [
+  { client: "ИП Прутян Е.В.", action: "Email: reorder-reminder", react: "открыт, без клика", reactKind: "warn", time: "07:12" },
+  { client: "ИП Хабиров Р.М.", action: "Win-back письмо", react: "открыт + клик по акциям → эскалация в очередь", reactKind: "good", time: "07:11" },
+  { client: "ООО «Эдем»", action: "Эскалация в очередь", react: "3 касания без реакции", reactKind: "bad", time: "07:10" },
+  { client: "ООО «Роса»", action: "Push заведующей: акции Q4", react: "доставлен, переход в МФ", reactKind: "good", time: "07:08" },
+  { client: "ИП Шакирова Г.Ф.", action: "Стадия: активный → снижение", react: "28 дней без заказа", reactKind: "bad", time: "07:05" },
+  { client: "ИП Комиссарова Л.А.", action: "Email: дайджест акций", react: "не открыт", reactKind: "warn", time: "07:03" },
+];
+const botTotals = "Вся твоя база за прогон: 14 email · 9 push · 4 смены стадий · 2 эскалации";
+
+// План контактов на квартал (автопланирование)
+const quarterPlan = [
+  { label: "Контакты с собственниками", plan: 70, fact: 31 },
+  { label: "Контакты с заведующими", plan: 100, fact: 52 },
+  { label: "Регистрации зав в ФА", plan: 66, fact: 12 },
+  { label: "Эксклюзивные ДС, аптек", plan: 31, fact: 18 },
+  { label: "Объём заказа, тыс. ₽", plan: 2000, fact: 1456 },
+];
+
+const KIND = {
+  cycle: { label: "Цикл", bg: "#F0F2EF", color: "#5B6660" },
+  bot: { label: "От бота", bg: "#EAEDFC", color: "#4B5AE4" },
+  repeat: { label: "Повтор", bg: "#FBF1DF", color: "#B7791F" },
+};
+
+const CAT_COLOR = (cat) =>
+  cat.startsWith("A") ? { bg: C.greenSoft, color: C.green }
+  : cat.startsWith("B") ? { bg: "#E8F0FA", color: "#2D6CB5" }
+  : cat.startsWith("C") ? { bg: C.amberSoft, color: C.amber }
+  : { bg: "#F0F2EF", color: C.grey };
+
+// ── UI-примитивы ──────────────────────────────────────────────
+const Badge = ({ children, color, bg }) => (
+  <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+    {children}
+  </span>
+);
+
+const Card = ({ children, style }) => (
+  <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, ...style }}>{children}</div>
+);
+
+const SectionTitle = ({ children, right }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.inkSoft }}>{children}</div>
+    {right}
+  </div>
+);
+
+const Bar = ({ pct, color }) => (
+  <div style={{ height: 6, background: "#EDEFEC", borderRadius: 3, overflow: "hidden" }}>
+    <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: color, borderRadius: 3 }} />
+  </div>
+);
+
+// ── Главный компонент ────────────────────────────────────────
+function FarmhubCrmDay() {
+  const [queue, setQueue] = useState(initialQueue);
+  const [filter, setFilter] = useState("all");
+
+  const doneCount = queue.filter((q) => q.done).length;
+  const shown = queue.filter((q) => filter === "all" || q.kind === filter);
+  const toggle = (id) => setQueue((p) => p.map((q) => (q.id === id ? { ...q, done: !q.done } : q)));
+
+  return (
+    <div style={{ fontFamily: "'Manrope','Inter',system-ui,sans-serif", background: C.bg, minHeight: "100vh", color: C.ink, fontSize: 13 }}>
+      {/* ── Шапка ── */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 19, fontWeight: 800 }}>Мой день · среда, 10 июня</div>
+          <div style={{ color: C.inkSoft, marginTop: 3 }}>
+            {mop.name} · РОП: {mop.rop} · база: {mop.base} клиентов / {mop.pharmacies} аптек
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 22, alignItems: "center" }}>
+          <Metric label="Контактов сегодня" value={`${doneCount} / ${queue.length}`} sub="по автоплану квартала" subColor={C.grey} />
+          <Metric label="Алармов в очереди" value={queue.filter((q) => !q.done && q.alarms > 0).length} sub="клиентов с красными задачами" subColor={C.red} />
+          <Metric label="Эскалаций бота" value={queue.filter((q) => q.kind === "bot").length} sub="за ночь" subColor={C.bot} />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 330px", gap: 14, padding: 14, alignItems: "start" }}>
+        {/* ЦЕНТР: очередь контактов */}
+        <Card>
+          <SectionTitle
+            right={
+              <div style={{ display: "flex", gap: 4 }}>
+                {[["all", "все"], ["cycle", "цикл"], ["bot", "от бота"], ["repeat", "повторы"]].map(([k, l]) => (
+                  <button key={k} onClick={() => setFilter(k)}
+                    style={{
+                      border: `1px solid ${filter === k ? C.ink : C.line}`, background: filter === k ? C.ink : C.surface,
+                      color: filter === k ? "#fff" : C.inkSoft, borderRadius: 5, padding: "2px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            }>
+            Очередь контактов — приоритет: категория × срочность
+          </SectionTitle>
+
+          {shown.map((q) => {
+            const cat = CAT_COLOR(q.cat);
+            const kind = KIND[q.kind];
+            return (
+              <div key={q.id}
+                style={{
+                  display: "flex", gap: 12, alignItems: "center", borderTop: `1px solid ${C.line}`, padding: "11px 0",
+                  opacity: q.done ? 0.45 : 1,
+                }}>
+                <button onClick={() => toggle(q.id)} title={q.done ? "Вернуть в очередь" : "Контакт состоялся"}
+                  style={{
+                    width: 26, height: 26, borderRadius: 7, flexShrink: 0, cursor: "pointer",
+                    border: `2px solid ${q.done ? C.green : C.line}`,
+                    background: q.done ? C.green : C.surface, color: "#fff", fontWeight: 900, fontSize: 14,
+                  }}>
+                  {q.done ? "✓" : ""}
+                </button>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 800, fontSize: 14 }}>{q.client}</span>
+                    <Badge bg={cat.bg} color={cat.color}>{q.cat}</Badge>
+                    <Badge bg={kind.bg} color={kind.color}>{kind.label}</Badge>
+                    <span style={{ color: C.inkSoft, fontSize: 12 }}>{q.person}</span>
+                  </div>
+                  <div style={{ color: C.inkSoft, fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>{q.reason}</div>
+                </div>
+
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>
+                    {q.tasks} задач{q.alarms > 0 && <span style={{ color: C.red }}> · {q.alarms} !</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.grey }}>
+                    скоринг {q.score}
+                    <span style={{ color: q.trend > 0 ? C.green : q.trend < 0 ? C.red : C.grey, fontWeight: 700 }}>
+                      {" "}{q.trend > 0 ? `+${q.trend}` : q.trend < 0 ? q.trend : "·"}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                  <button onClick={() => window.__nav && window.__nav("visit")} style={{
+                    border: "none", background: C.green, color: "#fff", borderRadius: 6,
+                    padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer",
+                  }}>
+                    {q.channel} → визит
+                  </button>
+                  <div style={{ fontSize: 10, color: C.grey, textAlign: "center" }}>
+                    {q.kind === "bot" ? "эскалация → звонок" : q.kind === "repeat" ? "повтор → канал выше" : `цикл ${q.cat[0]} → ${q.channel.toLowerCase()}`}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+
+        {/* ПРАВАЯ колонка */}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Card style={{ background: C.botSoft, border: "1px solid #D5DAF7" }}>
+            <SectionTitle right={<span style={{ fontSize: 11, color: C.bot, fontWeight: 700 }}>прогон 07:00</span>}>
+              Бот по твоим клиентам — ночью
+            </SectionTitle>
+            {botDigest.map((b, i) => (
+              <div key={i} style={{ padding: "7px 0", borderTop: i ? "1px solid #D5DAF7" : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ fontWeight: 800, fontSize: 12 }}>{b.client}</span>
+                  <span style={{ fontSize: 11, color: C.grey, whiteSpace: "nowrap" }}>{b.time}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.ink, marginTop: 1 }}>{b.action}</div>
+                <div style={{ marginTop: 3 }}>
+                  <Badge
+                    bg={b.reactKind === "good" ? C.greenSoft : b.reactKind === "bad" ? C.redSoft : C.amberSoft}
+                    color={b.reactKind === "good" ? C.green : b.reactKind === "bad" ? C.red : C.amber}>
+                    {b.react}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.bot, fontWeight: 700, marginTop: 10, borderTop: "1px solid #D5DAF7", paddingTop: 8 }}>
+              {botTotals}
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle right={<span style={{ fontSize: 11, color: C.grey }}>42% квартала прошло</span>}>
+              План квартала — Q2
+            </SectionTitle>
+            {quarterPlan.map((p, i) => {
+              const pct = Math.round((p.fact / p.plan) * 100);
+              const color = pct >= 42 ? C.green : pct >= 25 ? C.amber : C.red;
+              return (
+                <div key={i} style={{ padding: "7px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, fontSize: 12 }}>{p.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color }}>
+                      {p.fact} / {p.plan} · {pct}%
+                    </span>
+                  </div>
+                  <Bar pct={pct} color={color} />
+                </div>
+              );
+            })}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 10 }}>
+              Цвет — темп к доле прошедшего квартала, не к 100%. Детали и премия — на дашборде.
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle>Автоплан недели</SectionTitle>
+            {[
+              ["пн 08.06", 6, 6], ["вт 09.06", 7, 7], ["ср 10.06", 7, null],
+              ["чт 11.06", 6, null], ["пт 12.06", 8, null],
+            ].map(([d, n, f], i) => (
+              <div key={i} style={{
+                display: "flex", justifyContent: "space-between", padding: "6px 0",
+                borderTop: i ? `1px solid ${C.line}` : "none",
+                fontWeight: d === "ср 10.06" ? 800 : 500,
+              }}>
+                <span>{d}</span>
+                <span style={{ color: f === null ? C.ink : f >= n ? C.green : C.red }}>
+                  {f === null ? `${n} контактов` : `${f} / ${n} ✓`}
+                </span>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+              Контакты разложены по дням равномерно, интервал по клиенту ±3 дня, приоритет высоким категориям.
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Metric = ({ label, value, sub, subColor }) => (
+  <div style={{ textAlign: "right" }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.grey }}>{label}</div>
+    <div style={{ fontSize: 18, fontWeight: 800 }}>{value}</div>
+    <div style={{ fontSize: 11, color: subColor, fontWeight: 600 }}>{sub}</div>
+  </div>
+);
+
+return FarmhubCrmDay;
+})();
+
+const Screen_visit = (() => {
+const { useState } = React;
+// ─────────────────────────────────────────────────────────────
+// ФармХаб CRM — Экран (б): Карточка клиента + Форма визита
+// Мок без бэкенда. Данные имитируют выгрузку из МФ/ФА/ФХ.
+// ─────────────────────────────────────────────────────────────
+
+const C = {
+  bg: "#F6F7F5",
+  surface: "#FFFFFF",
+  ink: "#1C2420",
+  inkSoft: "#5B6660",
+  line: "#E3E7E2",
+  green: "#0E6B5C",
+  greenSoft: "#E3F0ED",
+  bot: "#4B5AE4",
+  botSoft: "#EAEDFC",
+  red: "#C8442C",
+  redSoft: "#FAE9E5",
+  amber: "#B7791F",
+  amberSoft: "#FBF1DF",
+  grey: "#8A948E",
+};
+
+// ── Мок-данные ────────────────────────────────────────────────
+const client = {
+  name: "ИП Прутян Е.В.",
+  id: "CL-04812",
+  category: "A2",
+  score: 71,
+  stage: "Активный",
+  manager: "Левина Светлана",
+  exclusive: false,
+  quarterPlan: { orders: 120000, fact: 32613, daysPct: 42, ordersPct: 27 },
+  orgs: [
+    {
+      inn: "ИНН 0234987612",
+      name: "ИП Прутян Е.В.",
+      pharmacies: [
+        { id: "PH-1", addr: "Уфа, ул. М. Джалиля, 18", zavReg: true, farmTotal: 4, farmFA: 3, distrs: 1 },
+        { id: "PH-2", addr: "Уфа, пр. Октября, 91", zavReg: true, farmTotal: 3, farmFA: 1, distrs: 1 },
+      ],
+    },
+    {
+      inn: "ИНН 0277134455",
+      name: "ООО «Прутян Фарм»",
+      pharmacies: [
+        { id: "PH-3", addr: "Стерлитамак, ул. Мира, 5", zavReg: false, farmTotal: 2, farmFA: 0, distrs: 0 },
+      ],
+    },
+  ],
+  persons: {
+    owner: { fio: "Прутян Елена Викторовна", role: "Собственник", phone: "+7 986 555-66-77", email: "prutyan@mail.ru" },
+    zav: { fio: "Балалаева Махрибан Ивановна", role: "Заведующая · PH-1, PH-2", phone: "+7 987 222-11-03", faStatus: "verified" },
+    farm: { fio: "Петрова Светлана Сергеевна", role: "Фармацевт · PH-1", phone: "+7 917 404-18-22", faStatus: "verified" },
+  },
+};
+
+// Снапшот статусов: [показатель, прошлый визит, сейчас, источник, alarm?]
+const snapshots = {
+  owner: [
+    ["Договор подписан", "да", "да", "МФ", false],
+    ["ДС подписано", "нет", "да", "МФ", false],
+    ["Производителей в ДС", "—", "12", "МФ", false],
+    ["Эксклюзив", "нет", "нет", "МФ", true],
+    ["ОФД подключен", "да", "да", "МФ", false],
+    ["Закупки настроены", "нет", "нет", "МФ", true],
+    ["Дистров подключено (мин. 3)", "0", "1 · БСС", "ФХ", true],
+    ["Акции: подключено / приглашено", "11 / 59", "21 / 61", "МФ", true],
+    ["Бонус клиента, кв., ₽", "359", "423", "МФ", false],
+    ["Заказы за квартал, ₽", "22 518", "32 613", "МФ", true],
+  ],
+  zav: [
+    ["Анкета ФА подтверждена", "—", "да", "ФА", false],
+    ["Авторизация по чеку", "—", "да", "ФА", false],
+    ["Бонус с начала квартала, ₽", "1 212", "1 516", "ФА", false],
+    ["PH-1: фарм. в чеках / в ФА", "4 / 2", "4 / 3", "МФ+ФА", true],
+    ["PH-2: фарм. в чеках / в ФА", "3 / 1", "3 / 1", "МФ+ФА", true],
+    ["Заказы за квартал, ₽", "11 213", "21 346", "МФ", false],
+  ],
+  farm: [
+    ["Анкета ФА подтверждена", "—", "да", "ФА", false],
+    ["Авторизация по чеку", "—", "да", "ФА", false],
+    ["Бонус с начала квартала, ₽", "890", "1 110", "ФА", false],
+    ["Заданий доступно / выполнено", "5 / 1", "8 / 1", "ФА", true],
+  ],
+};
+
+// Автозадачи на визит: trigger → задача, alarm
+const initialTasks = {
+  owner: [
+    { id: 1, text: "Подписать эксклюзивное ДС", trigger: "Эксклюзива нет", alarm: false, result: null },
+    { id: 2, text: "Договориться об интеграции по закупкам", trigger: "Закупки не настроены, повтор с прошлого визита", alarm: true, result: null },
+    { id: 3, text: "Настроить ещё 2 дистров (Катрен / Протек / Пульс)", trigger: "Подключён 1 из 3, нет якорного дистра", alarm: false, result: null },
+    { id: 4, text: "Подключить 40 новых акций", trigger: "Подключено 21 из 61 приглашений (34%)", alarm: true, result: null },
+    { id: 5, text: "Сделать заказ с клиентом", trigger: "Темп заказа 27% при 42% квартала", alarm: true, result: null },
+  ],
+  zav: [
+    { id: 1, text: "Зарегистрировать фармацевта в ФА (PH-1)", trigger: "В чеках 4, в ФА 3", alarm: false, result: null },
+    { id: 2, text: "Зарегистрировать 2 фармацевтов в ФА (PH-2)", trigger: "В чеках 3, в ФА 1", alarm: true, result: null },
+    { id: 3, text: "Сделать заказ через МФ", trigger: "Темп заказа ниже планового", alarm: false, result: null },
+    { id: 4, text: "Поставить фармацевтам задачу по акционному товару", trigger: "Подключены новые акции", alarm: false, result: null },
+  ],
+  farm: [
+    { id: 1, text: "Пройти 7 доступных заданий в ФА", trigger: "Выполнено 1 из 8", alarm: true, result: null },
+    { id: 2, text: "Акцент на акционный товар Мирролла (Q4)", trigger: "Подключена акция universal/loyalty", alarm: false, result: null },
+  ],
+};
+
+// Единая лента касаний: bot + МОП
+const timeline = [
+  { who: "bot", type: "email", date: "09.06 07:12", title: "Reorder-reminder отправлен", detail: "Шаблон от лица Левиной С. Открыт через 3 ч, клика нет.", state: "открыт" },
+  { who: "bot", type: "score", date: "09.06 07:10", title: "Скоринг пересчитан: 74 → 71", detail: "Темп заказа отстаёт от квартала. Рекомендация: личный контакт + заказ.", state: null },
+  { who: "mop", type: "call", date: "02.06 14:40", title: "Звонок собственнику · 12 мин", detail: "Обсудили ДС — подписано. Закупки: «подумает». Конверсия визита 3/5.", state: null },
+  { who: "bot", type: "push", date: "30.05 09:00", title: "Push: 12 новых акций Q4", detail: "Доставлен заведующей PH-1. Переход в МФ — да.", state: "клик" },
+  { who: "bot", type: "task", date: "28.05 07:15", title: "Задача МОПу: нет реакции", detail: "3 касания без отклика по интеграции закупок → эскалация Левиной С.", state: "выполнена" },
+  { who: "mop", type: "wa", date: "21.05 11:05", title: "WhatsApp заведующей", detail: "Напоминание о регистрации фармацевтов PH-2. Без ответа.", state: null },
+];
+
+const nextContacts = [
+  { who: "mop", date: "10.06", label: "Визит к собственнику (этот экран)" },
+  { who: "bot", date: "13.06", label: "Email: дайджест акций, если не будет заказа" },
+  { who: "mop", date: "01.07", label: "Плановый контакт с заведующей (цикл A2: каждые 21±3 дня)" },
+];
+
+// ── UI-примитивы ──────────────────────────────────────────────
+const Badge = ({ children, color, bg }) => (
+  <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+    {children}
+  </span>
+);
+
+const SectionTitle = ({ children, right }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.inkSoft }}>{children}</div>
+    {right}
+  </div>
+);
+
+const Card = ({ children, style }) => (
+  <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, ...style }}>{children}</div>
+);
+
+// ── Главный компонент ────────────────────────────────────────
+function FarmhubCrmVisit() {
+  const [role, setRole] = useState("owner");
+  const [tasks, setTasks] = useState(initialTasks);
+  const [feed, setFeed] = useState("all");
+  const [visitOrder, setVisitOrder] = useState({ count: "", sum: "" });
+
+  const roleTabs = [
+    { key: "owner", label: "Собственник" },
+    { key: "zav", label: "Заведующая" },
+    { key: "farm", label: "Фармацевт" },
+  ];
+  const person = role === "owner" ? client.persons.owner : role === "zav" ? client.persons.zav : client.persons.farm;
+  const curTasks = tasks[role];
+  const done = curTasks.filter((t) => t.result === true).length;
+  const answered = curTasks.filter((t) => t.result !== null).length;
+  const convPct = curTasks.length ? Math.round((done / curTasks.length) * 100) : 0;
+
+  const setResult = (id, val) =>
+    setTasks((p) => ({ ...p, [role]: p[role].map((t) => (t.id === id ? { ...t, result: t.result === val ? null : val } : t)) }));
+
+  const shownFeed = timeline.filter((e) => feed === "all" || e.who === feed);
+
+  return (
+    <div style={{ fontFamily: "'Manrope','Inter',system-ui,sans-serif", background: C.bg, minHeight: "100vh", color: C.ink, fontSize: 13 }}>
+      {/* ── Шапка клиента ── */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 19, fontWeight: 800 }}>{client.name}</span>
+            <Badge bg={C.greenSoft} color={C.green}>Категория {client.category} · авторасчёт</Badge>
+            <Badge bg={C.amberSoft} color={C.amber}>{client.stage}</Badge>
+            {!client.exclusive && <Badge bg={C.redSoft} color={C.red}>Без эксклюзива</Badge>}
+          </div>
+          <div style={{ color: C.inkSoft, marginTop: 3 }}>
+            {client.id} · Менеджер: <b style={{ color: C.ink }}>{client.manager}</b> · 2 юрлица · 3 аптеки
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 22, alignItems: "center" }}>
+          <Metric label="Скоринг бота" value={client.score} sub="−3 за неделю" subColor={C.red} />
+          <Metric label="Заказы / план кв." value="27%" sub={`при ${client.quarterPlan.daysPct}% квартала`} subColor={C.red} />
+          <Metric label="Бонус клиента, кв." value="423 ₽" sub="+64 ₽ с визита" subColor={C.green} />
+        </div>
+      </div>
+
+      {/* ── 3 колонки ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "270px 1fr 320px", gap: 14, padding: 14, alignItems: "start" }}>
+        {/* ЛЕВАЯ: структура */}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Card>
+            <SectionTitle>Структура клиента</SectionTitle>
+            {client.orgs.map((o) => (
+              <div key={o.inn} style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 700 }}>{o.name}</div>
+                <div style={{ color: C.inkSoft, fontSize: 11, marginBottom: 6 }}>{o.inn}</div>
+                {o.pharmacies.map((p) => (
+                  <div key={p.id} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", marginBottom: 6, background: "#FBFCFB" }}>
+                    <div style={{ fontWeight: 600, fontSize: 12 }}>{p.id} · {p.addr}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+                      <Badge bg={p.zavReg ? C.greenSoft : C.redSoft} color={p.zavReg ? C.green : C.red}>
+                        зав {p.zavReg ? "в ФА" : "нет в ФА"}
+                      </Badge>
+                      <Badge bg={p.farmFA === p.farmTotal ? C.greenSoft : C.amberSoft} color={p.farmFA === p.farmTotal ? C.green : C.amber}>
+                        фарм {p.farmFA}/{p.farmTotal}
+                      </Badge>
+                      <Badge bg={p.distrs >= 3 ? C.greenSoft : C.redSoft} color={p.distrs >= 3 ? C.green : C.red}>
+                        дистры {p.distrs}/3
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey }}>Связь зав↔фарм — через закрепление за адресом точки.</div>
+          </Card>
+
+          <Card style={{ background: C.botSoft, border: `1px solid #D5DAF7` }}>
+            <SectionTitle>Рекомендация бота</SectionTitle>
+            <div style={{ fontWeight: 700, color: C.bot, marginBottom: 4 }}>Личный контакт + заказ на визите</div>
+            <div style={{ color: C.ink, lineHeight: 1.5 }}>
+              Темп заказа 27% при 42% квартала. Email-напоминание открыто без клика. Клиент A2 — бот не дожимает сам, передаёт МОПу.
+            </div>
+          </Card>
+        </div>
+
+        {/* ЦЕНТР: визит */}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Card>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>Визит · 10.06.2026</div>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                {roleTabs.map((t) => (
+                  <button key={t.key} onClick={() => setRole(t.key)}
+                    style={{
+                      border: `1px solid ${role === t.key ? C.green : C.line}`,
+                      background: role === t.key ? C.green : C.surface,
+                      color: role === t.key ? "#fff" : C.ink,
+                      borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 14, color: C.inkSoft, flexWrap: "wrap" }}>
+              <span><b style={{ color: C.ink }}>{person.fio}</b> · {person.role}</span>
+              <span>{person.phone}</span>
+              {person.faStatus && <Badge bg={C.greenSoft} color={C.green}>ФА: verified</Badge>}
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle right={<span style={{ fontSize: 11, color: C.grey }}>автосбор из МФ / ФА / ФХ</span>}>
+              Состояние перед визитом
+            </SectionTitle>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ color: C.inkSoft, fontSize: 11, textAlign: "left" }}>
+                  <th style={{ padding: "4px 0", fontWeight: 600 }}>Показатель</th>
+                  <th style={{ fontWeight: 600 }}>Прошлый визит</th>
+                  <th style={{ fontWeight: 600 }}>Сейчас</th>
+                  <th style={{ fontWeight: 600 }}>Источник</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshots[role].map(([name, prev, cur, src, alarm], i) => (
+                  <tr key={i} style={{ borderTop: `1px solid ${C.line}` }}>
+                    <td style={{ padding: "7px 0", fontWeight: 600 }}>{name}</td>
+                    <td style={{ color: C.inkSoft }}>{prev}</td>
+                    <td style={{ fontWeight: 700, color: alarm ? C.red : C.ink }}>{cur}</td>
+                    <td><Badge bg="#F0F2EF" color={C.inkSoft}>{src}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+
+          <Card>
+            <SectionTitle
+              right={
+                <span style={{ fontWeight: 800, color: convPct >= 70 ? C.green : convPct >= 40 ? C.amber : C.red }}>
+                  Конверсия {done}/{curTasks.length} · {convPct}%
+                </span>
+              }>
+              План визита — задачи сформированы автоматически
+            </SectionTitle>
+            {curTasks.map((t) => (
+              <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", borderTop: `1px solid ${C.line}`, padding: "9px 0" }}>
+                {t.alarm && <span title="Аларм" style={{ color: C.red, fontWeight: 900 }}>!</span>}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700 }}>{t.text}</div>
+                  <div style={{ fontSize: 11, color: C.grey }}>Триггер: {t.trigger}</div>
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <ResultBtn active={t.result === true} color={C.green} bg={C.greenSoft} onClick={() => setResult(t.id, true)}>да</ResultBtn>
+                  <ResultBtn active={t.result === false} color={C.red} bg={C.redSoft} onClick={() => setResult(t.id, false)}>нет</ResultBtn>
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+              Если «да» по ОФД/закупкам не подтвердится данными к следующему визиту — задача выставится снова.
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle>Заполняется вручную на визите</SectionTitle>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <Field label="Сформировано заказов" value={visitOrder.count} onChange={(v) => setVisitOrder((p) => ({ ...p, count: v }))} placeholder="1" w={150} />
+              <Field label="Сумма заказов на визите, ₽" value={visitOrder.sum} onChange={(v) => setVisitOrder((p) => ({ ...p, sum: v }))} placeholder="10 095" w={190} />
+              <Field label="Заявка на интеграцию/выгрузку" value="" onChange={() => {}} placeholder="да / нет" w={170} />
+            </div>
+            <button
+              disabled={answered < curTasks.length}
+              style={{
+                marginTop: 14, border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 800, fontSize: 13,
+                background: answered < curTasks.length ? "#D8DDD9" : C.green, color: "#fff",
+                cursor: answered < curTasks.length ? "not-allowed" : "pointer",
+              }}>
+              {answered < curTasks.length ? `Отметь результат по всем задачам (${answered}/${curTasks.length})` : "Сохранить отчёт за визит"}
+            </button>
+          </Card>
+        </div>
+
+        {/* ПРАВАЯ: лента + план */}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Card>
+            <SectionTitle
+              right={
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[["all", "все"], ["bot", "бот"], ["mop", "МОП"]].map(([k, l]) => (
+                    <button key={k} onClick={() => setFeed(k)}
+                      style={{
+                        border: `1px solid ${feed === k ? C.ink : C.line}`, background: feed === k ? C.ink : C.surface,
+                        color: feed === k ? "#fff" : C.inkSoft, borderRadius: 5, padding: "2px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      }}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              }>
+              Лента касаний
+            </SectionTitle>
+            {shownFeed.map((e, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: e.who === "bot" ? C.botSoft : C.greenSoft, color: e.who === "bot" ? C.bot : C.green, fontSize: 10, fontWeight: 800,
+                }}>
+                  {e.who === "bot" ? "БОТ" : "МОП"}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 12 }}>{e.title}</span>
+                    <span style={{ color: C.grey, fontSize: 11, whiteSpace: "nowrap" }}>{e.date}</span>
+                  </div>
+                  <div style={{ color: C.inkSoft, fontSize: 12, lineHeight: 1.45 }}>{e.detail}</div>
+                  {e.state && <Badge bg="#F0F2EF" color={C.inkSoft}>{e.state}</Badge>}
+                </div>
+              </div>
+            ))}
+          </Card>
+
+          <Card>
+            <SectionTitle>Следующие касания</SectionTitle>
+            {nextContacts.map((n, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                <Badge bg={n.who === "bot" ? C.botSoft : C.greenSoft} color={n.who === "bot" ? C.bot : C.green}>{n.date}</Badge>
+                <div style={{ fontSize: 12 }}>{n.label}</div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+              Маршрутизация: категория A2 → личный цикл МОПа, бот работает между визитами и эскалирует при отсутствии реакции.
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Metric = ({ label, value, sub, subColor }) => (
+  <div style={{ textAlign: "right" }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.grey }}>{label}</div>
+    <div style={{ fontSize: 18, fontWeight: 800 }}>{value}</div>
+    <div style={{ fontSize: 11, color: subColor, fontWeight: 600 }}>{sub}</div>
+  </div>
+);
+
+const ResultBtn = ({ active, color, bg, onClick, children }) => (
+  <button onClick={onClick}
+    style={{
+      border: `1px solid ${active ? color : C.line}`, background: active ? bg : C.surface, color: active ? color : C.inkSoft,
+      borderRadius: 6, padding: "5px 13px", fontSize: 12, fontWeight: 800, cursor: "pointer",
+    }}>
+    {children}
+  </button>
+);
+
+const Field = ({ label, value, onChange, placeholder, w }) => (
+  <label style={{ display: "block" }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: C.inkSoft, marginBottom: 4 }}>{label}</div>
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+      style={{ width: w, border: `1px solid ${C.line}`, borderRadius: 7, padding: "8px 10px", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+  </label>
+);
+
+return FarmhubCrmVisit;
+})();
+
+const Screen_mop = (() => {
+const { useState } = React;
+// ─────────────────────────────────────────────────────────────
+// ФармХаб CRM — Экран (в): Дашборд МОПа · Премия
+// Премиальный движок: план/факт → коэффициент → ₽.
+// Симулятор: +/− действие, премия пересчитывается живьём.
+// ─────────────────────────────────────────────────────────────
+
+const C = {
+  bg: "#F6F7F5", surface: "#FFFFFF", ink: "#1C2420", inkSoft: "#5B6660",
+  line: "#E3E7E2", green: "#0E6B5C", greenSoft: "#E3F0ED",
+  bot: "#4B5AE4", botSoft: "#EAEDFC", red: "#C8442C", redSoft: "#FAE9E5",
+  amber: "#B7791F", amberSoft: "#FBF1DF", grey: "#8A948E",
+};
+
+// Шкала коэффициентов (конфигурируется админом помесячно)
+const TIERS = [
+  { from: 0, to: 50, k: 0 },
+  { from: 50, to: 70, k: 0.3 },
+  { from: 70, to: 100, k: 0.7 },
+  { from: 100, to: 120, k: 1 },
+  { from: 120, to: Infinity, k: 1.2 },
+];
+const tierOf = (pct) => TIERS.find((t) => pct >= t.from && pct < t.to) || TIERS[TIERS.length - 1];
+
+// Активности июня: план, факт, цена единицы (₽)
+// unit=1 — штучные действия; для объёма заказа цена за 1000 ₽ заказа
+const initialActs = {
+  month: [
+    { id: "own", name: "Контакты с собственниками", plan: 24, fact: 19, price: 300, step: 1, unit: "контакт" },
+    { id: "zav", name: "Контакты с заведующими", plan: 34, fact: 30, price: 200, step: 1, unit: "контакт" },
+    { id: "excl", name: "Эксклюзивные ДС, аптек", plan: 10, fact: 4, price: 1500, step: 1, unit: "аптека" },
+    { id: "reg", name: "Регистрации зав в ФА", plan: 22, fact: 11, price: 800, step: 1, unit: "регистрация" },
+    { id: "ord", name: "Объём заказа, тыс. ₽", plan: 700, fact: 612, price: 10, step: 25, unit: "тыс. ₽", pct: true },
+  ],
+  quarter: [
+    { id: "own", name: "Контакты с собственниками", plan: 70, fact: 31, price: 300, step: 1, unit: "контакт" },
+    { id: "zav", name: "Контакты с заведующими", plan: 100, fact: 52, price: 200, step: 1, unit: "контакт" },
+    { id: "excl", name: "Эксклюзивные ДС, аптек", plan: 31, fact: 18, price: 1500, step: 1, unit: "аптека" },
+    { id: "reg", name: "Регистрации зав в ФА", plan: 66, fact: 12, price: 800, step: 1, unit: "регистрация" },
+    { id: "ord", name: "Объём заказа, тыс. ₽", plan: 2000, fact: 1456, price: 10, step: 50, unit: "тыс. ₽", pct: true },
+  ],
+};
+
+const premiumOf = (a) => {
+  const pct = (a.fact / a.plan) * 100;
+  return Math.round(a.fact * a.price * tierOf(pct).k);
+};
+
+// Подсказки «что добить»: где ближайший порог даёт максимум ₽ за единицу усилия
+const monthHistory = [
+  { m: "Март", v: 21400 }, { m: "Апрель", v: 26800 }, { m: "Май", v: 19200 },
+];
+
+const Badge = ({ children, color, bg }) => (
+  <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{children}</span>
+);
+const Card = ({ children, style }) => (
+  <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, ...style }}>{children}</div>
+);
+const SectionTitle = ({ children, right }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.inkSoft }}>{children}</div>
+    {right}
+  </div>
+);
+
+// Лесенка порогов одной активности
+const TierLadder = ({ pct }) => (
+  <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", position: "relative", background: "#EDEFEC" }}>
+    {[{ w: 50, k: "0" }, { w: 20, k: "0,3" }, { w: 30, k: "0,7" }, { w: 20, k: "1" }, { w: 20, k: "1,2" }].map((s, i) => (
+      <div key={i} style={{ width: `${(s.w / 140) * 100}%`, borderRight: i < 4 ? "2px solid #fff" : "none", background: ["#EDEFEC", "#FBF1DF", "#FCE8D9", "#E3F0ED", "#CFE8E2"][i] }} />
+    ))}
+    <div style={{
+      position: "absolute", left: `${Math.min(pct, 140) / 1.4}%`, top: -3, width: 4, height: 16,
+      background: C.ink, borderRadius: 2, transform: "translateX(-2px)",
+    }} />
+  </div>
+);
+
+function FarmhubCrmMopDash() {
+  const [period, setPeriod] = useState("month");
+  const [acts, setActs] = useState(initialActs);
+
+  const cur = acts[period];
+  const total = cur.reduce((s, a) => s + premiumOf(a), 0);
+  const totalAt100 = cur.reduce((s, a) => s + Math.round(a.plan * a.price * 1), 0);
+
+  const bump = (id, dir) =>
+    setActs((p) => ({
+      ...p,
+      [period]: p[period].map((a) => (a.id === id ? { ...a, fact: Math.max(0, a.fact + dir * a.step) } : a)),
+    }));
+
+  // «Что добить»: для каждой активности — расстояние до следующего порога и прирост премии
+  const hints = cur
+    .map((a) => {
+      const pct = (a.fact / a.plan) * 100;
+      const tier = tierOf(pct);
+      if (tier.to === Infinity) return null;
+      const needFact = Math.ceil((tier.to / 100) * a.plan) - a.fact;
+      const newPremium = Math.round(((tier.to / 100) * a.plan) * a.price * tierOf(tier.to).k);
+      const gain = newPremium - premiumOf(a);
+      return { name: a.name, needFact, unit: a.unit, nextK: tierOf(tier.to).k, gain, perUnit: Math.round(gain / Math.max(needFact, 1)) };
+    })
+    .filter(Boolean)
+    .sort((x, y) => y.perUnit - x.perUnit);
+
+  const periodLabel = period === "month" ? "июнь" : "Q2";
+  const periodPart = period === "month" ? 33 : 42; // % периода прошло
+
+  return (
+    <div style={{ fontFamily: "'Manrope','Inter',system-ui,sans-serif", background: C.bg, minHeight: "100vh", color: C.ink, fontSize: 13 }}>
+      {/* Шапка */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 19, fontWeight: 800 }}>Моя премия · {periodLabel}</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {[["month", "месяц"], ["quarter", "квартал"]].map(([k, l]) => (
+                <button key={k} onClick={() => setPeriod(k)}
+                  style={{
+                    border: `1px solid ${period === k ? C.green : C.line}`, background: period === k ? C.green : C.surface,
+                    color: period === k ? "#fff" : C.ink, borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ color: C.inkSoft, marginTop: 3 }}>Левина Светлана · алгоритм премии: июнь (задан РОПом) · прошло {periodPart}% периода</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 26, alignItems: "center" }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.grey }}>Премия сейчас</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{total.toLocaleString("ru-RU")} ₽</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.grey }}>При 100% по всем</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.inkSoft }}>{totalAt100.toLocaleString("ru-RU")} ₽</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14, padding: 14, alignItems: "start" }}>
+        {/* Таблица активностей */}
+        <Card>
+          <SectionTitle right={<span style={{ fontSize: 11, color: C.grey }}>кнопки +/− — симулятор «что если»</span>}>
+            Активности → коэффициент → премия
+          </SectionTitle>
+          {cur.map((a, i) => {
+            const pct = Math.round((a.fact / a.plan) * 100);
+            const tier = tierOf(pct);
+            const prem = premiumOf(a);
+            const toNext = tier.to === Infinity ? null : Math.ceil((tier.to / 100) * a.plan) - a.fact;
+            return (
+              <div key={a.id} style={{ borderTop: i ? `1px solid ${C.line}` : "none", padding: "12px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontWeight: 800 }}>{a.name}</div>
+                    <div style={{ fontSize: 11, color: C.grey }}>
+                      {a.pct ? "ставка: 1% от суммы заказа × k" : `цена единицы: ${a.price} ₽`}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <SimBtn onClick={() => bump(a.id, -1)}>−</SimBtn>
+                    <div style={{ minWidth: 86, textAlign: "center", fontWeight: 800 }}>
+                      {a.fact.toLocaleString("ru-RU")} / {a.plan.toLocaleString("ru-RU")}
+                    </div>
+                    <SimBtn onClick={() => bump(a.id, 1)}>+</SimBtn>
+                  </div>
+                  <div style={{ width: 64, textAlign: "right", fontWeight: 800, color: pct >= 100 ? C.green : pct >= 70 ? C.amber : C.red }}>{pct}%</div>
+                  <Badge bg={tier.k >= 1 ? C.greenSoft : tier.k > 0 ? C.amberSoft : C.redSoft} color={tier.k >= 1 ? C.green : tier.k > 0 ? C.amber : C.red}>
+                    k = {String(tier.k).replace(".", ",")}
+                  </Badge>
+                  <div style={{ width: 92, textAlign: "right", fontWeight: 800 }}>{prem.toLocaleString("ru-RU")} ₽</div>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <TierLadder pct={pct} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.grey, marginTop: 3 }}>
+                    <span>0</span><span>50%</span><span>70%</span><span>100%</span><span>120%</span><span>140%+</span>
+                  </div>
+                </div>
+                {toNext !== null && toNext > 0 && (
+                  <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 5 }}>
+                    До k = {String(tierOf(tier.to).k).replace(".", ",")} осталось{" "}
+                    <b style={{ color: C.ink }}>{toNext.toLocaleString("ru-RU")} {a.unit}</b>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </Card>
+
+        {/* Правая колонка */}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Card style={{ background: C.greenSoft, border: "1px solid #CBE2DC" }}>
+            <SectionTitle>Что добить в первую очередь</SectionTitle>
+            <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 8 }}>Сортировка: максимум премии за единицу усилия до ближайшего порога.</div>
+            {hints.slice(0, 3).map((h, i) => (
+              <div key={i} style={{ padding: "8px 0", borderTop: i ? "1px solid #CBE2DC" : "none" }}>
+                <div style={{ fontWeight: 800, fontSize: 12 }}>{h.name}</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>
+                  +{h.needFact.toLocaleString("ru-RU")} {h.unit} → k = {String(h.nextK).replace(".", ",")} →{" "}
+                  <b style={{ color: C.green }}>+{h.gain.toLocaleString("ru-RU")} ₽</b>
+                  <span style={{ color: C.grey }}> ({h.perUnit.toLocaleString("ru-RU")} ₽/ед.)</span>
+                </div>
+              </div>
+            ))}
+          </Card>
+
+          <Card>
+            <SectionTitle>Шкала коэффициентов · июнь</SectionTitle>
+            {TIERS.map((t, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderTop: i ? `1px solid ${C.line}` : "none", fontSize: 12 }}>
+                <span style={{ color: C.inkSoft }}>
+                  {t.to === Infinity ? `от ${t.from}%` : `${t.from}% – ${t.to}%`}
+                </span>
+                <b style={{ color: t.k >= 1 ? C.green : t.k > 0 ? C.amber : C.red }}>k = {String(t.k).replace(".", ",")}</b>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+              Алгоритм задаётся на месяц, в разные месяцы квартала может отличаться. Источник: настройки РОПа/админа.
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle>Премия по месяцам</SectionTitle>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 90, padding: "4px 2px" }}>
+              {[...monthHistory, { m: "Июнь*", v: total }].map((b, i) => {
+                const max = Math.max(...monthHistory.map((x) => x.v), total);
+                const isNow = i === 3;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: isNow ? C.green : C.inkSoft }}>
+                      {Math.round(b.v / 1000)}т
+                    </div>
+                    <div style={{
+                      width: "100%", height: `${(b.v / max) * 60}px`, borderRadius: "4px 4px 0 0",
+                      background: isNow ? C.green : "#CFD6D1",
+                    }} />
+                    <div style={{ fontSize: 10, color: C.grey }}>{b.m}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 10, color: C.grey }}>* июнь — текущее значение, не прогноз</div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SimBtn = ({ onClick, children }) => (
+  <button onClick={onClick}
+    style={{
+      width: 26, height: 26, border: `1px solid ${C.line}`, background: C.surface, color: C.ink,
+      borderRadius: 6, fontWeight: 900, fontSize: 14, cursor: "pointer", lineHeight: 1,
+    }}>
+    {children}
+  </button>
+);
+
+return FarmhubCrmMopDash;
+})();
+
+const Screen_rop = (() => {
+const { useState } = React;
+// ─────────────────────────────────────────────────────────────
+// ФармХаб CRM — Экран (г): Дашборд РОПа / Директора по продажам
+// Уровни: Директор → РОПы → МОПы (drill-down кликом).
+// Справа: критические отклонения + жизненный цикл базы (бот).
+// ─────────────────────────────────────────────────────────────
+
+const C = {
+  bg: "#F6F7F5", surface: "#FFFFFF", ink: "#1C2420", inkSoft: "#5B6660",
+  line: "#E3E7E2", green: "#0E6B5C", greenSoft: "#E3F0ED",
+  bot: "#4B5AE4", botSoft: "#EAEDFC", red: "#C8442C", redSoft: "#FAE9E5",
+  amber: "#B7791F", amberSoft: "#FBF1DF", grey: "#8A948E",
+};
+
+// Метрики: [контакты соб., контакты зав., эксклюзив (аптек), рег. зав в ФА, заказ тыс.₽]
+const METRICS = ["Конт. собств.", "Конт. завед.", "Экскл. ДС", "Рег. в ФА", "Заказ, т.₽"];
+
+const teams = [
+  {
+    rop: "Иванов Иван", premiumBase: "1,2% от заказа команды",
+    mops: [
+      { name: "Левина Светлана", plan: [70, 100, 31, 66, 2000], fact: [31, 52, 18, 12, 1456] },
+      { name: "Спирин Антон", plan: [60, 90, 25, 50, 1800], fact: [29, 41, 11, 24, 905] },
+      { name: "Скокина Дарья", plan: [65, 95, 28, 55, 1900], fact: [33, 50, 15, 21, 1212] },
+    ],
+  },
+  {
+    rop: "Петрова Анна", premiumBase: "1,2% от заказа команды",
+    mops: [
+      { name: "Гареев Тимур", plan: [70, 100, 30, 60, 2100], fact: [22, 35, 9, 8, 760] },
+      { name: "Мухина Ольга", plan: [60, 85, 24, 45, 1700], fact: [30, 44, 14, 19, 1104] },
+      { name: "Сафин Ринат", plan: [65, 95, 27, 50, 1850], fact: [12, 18, 4, 3, 410] },
+    ],
+  },
+  {
+    rop: "Козлов Денис", premiumBase: "1,2% от заказа команды",
+    mops: [
+      { name: "Юрьева Полина", plan: [70, 100, 32, 65, 2000], fact: [35, 55, 20, 28, 1530] },
+      { name: "Носов Артём", plan: [60, 90, 26, 52, 1750], fact: [27, 40, 12, 15, 980] },
+    ],
+  },
+];
+
+// Критические отклонения (уведомления РОПу/директору)
+const alerts = [
+  { level: "red", who: "Сафин Ринат (Петрова)", text: "18% по контактам при 42% квартала. 3 дня без активности в CRM.", action: "Открыть профиль" },
+  { level: "red", who: "Команда Петровой", text: "Регистрации зав в ФА: 19% — худший показатель по компании.", action: "Drill-down" },
+  { level: "amber", who: "Гареев Тимур (Петрова)", text: "Темп заказа 36% — клиент A1 «Эдем» ушёл в стадию «снижение».", action: "Клиенты в риске" },
+  { level: "amber", who: "Бот → вся база", text: "119 сделок (62%) в стадиях «снижение» и «нет заказов 30 дней».", action: "Воронка" },
+];
+
+// Жизненный цикл базы (стадии бота)
+const lifecycle = [
+  { stage: "Активный", n: 26, color: "#0E6B5C" },
+  { stage: "Снижение", n: 58, color: "#B7791F" },
+  { stage: "Нет заказов 30", n: 61, color: "#C8442C" },
+  { stage: "Реактивация", n: 22, color: "#4B5AE4" },
+  { stage: "Потерян", n: 24, color: "#8A948E" },
+];
+
+const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+const teamAgg = (t) => ({
+  plan: METRICS.map((_, i) => sum(t.mops.map((m) => m.plan[i]))),
+  fact: METRICS.map((_, i) => sum(t.mops.map((m) => m.fact[i]))),
+});
+const pctColor = (p) => (p >= 42 ? C.green : p >= 28 ? C.amber : C.red);
+
+const Card = ({ children, style }) => (
+  <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, ...style }}>{children}</div>
+);
+const SectionTitle = ({ children, right }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.inkSoft }}>{children}</div>
+    {right}
+  </div>
+);
+const Badge = ({ children, color, bg }) => (
+  <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{children}</span>
+);
+
+const PctCell = ({ fact, plan }) => {
+  const p = Math.round((fact / plan) * 100);
+  return (
+    <td style={{ textAlign: "right", padding: "8px 6px" }}>
+      <div style={{ fontWeight: 800, color: pctColor(p) }}>{p}%</div>
+      <div style={{ fontSize: 10, color: C.grey }}>{fact.toLocaleString("ru-RU")}/{plan.toLocaleString("ru-RU")}</div>
+    </td>
+  );
+};
+
+function FarmhubCrmRopDash() {
+  const [openRop, setOpenRop] = useState("Иванов Иван");
+  const [period, setPeriod] = useState("quarter");
+
+  const company = {
+    plan: METRICS.map((_, i) => sum(teams.map((t) => teamAgg(t).plan[i]))),
+    fact: METRICS.map((_, i) => sum(teams.map((t) => teamAgg(t).fact[i]))),
+  };
+
+  return (
+    <div style={{ fontFamily: "'Manrope','Inter',system-ui,sans-serif", background: C.bg, minHeight: "100vh", color: C.ink, fontSize: 13 }}>
+      {/* Шапка */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 19, fontWeight: 800 }}>Отдел продаж · Q2</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {[["week", "неделя"], ["month", "месяц"], ["quarter", "квартал"]].map(([k, l]) => (
+                <button key={k} onClick={() => setPeriod(k)}
+                  style={{
+                    border: `1px solid ${period === k ? C.green : C.line}`, background: period === k ? C.green : C.surface,
+                    color: period === k ? "#fff" : C.ink, borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ color: C.inkSoft, marginTop: 3 }}>Вид: директор по продажам · 3 РОПа · 8 МОП · прошло 42% квартала</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 22 }}>
+          {[0, 4].map((i) => {
+            const p = Math.round((company.fact[i] / company.plan[i]) * 100);
+            return (
+              <div key={i} style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.grey }}>{METRICS[i]} · компания</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: pctColor(p) }}>{p}%</div>
+                <div style={{ fontSize: 11, color: C.inkSoft }}>{company.fact[i].toLocaleString("ru-RU")} / {company.plan[i].toLocaleString("ru-RU")}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 330px", gap: 14, padding: 14, alignItems: "start" }}>
+        {/* Таблица команд с drill-down */}
+        <Card>
+          <SectionTitle right={<span style={{ fontSize: 11, color: C.grey }}>клик по РОПу — раскрыть команду; цвет — темп к 42% квартала</span>}>
+            Команды → МОПы · план / факт / %
+          </SectionTitle>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ fontSize: 11, color: C.inkSoft, textAlign: "right" }}>
+                <th style={{ textAlign: "left", padding: "4px 6px", fontWeight: 600 }}>РОП / МОП</th>
+                {METRICS.map((m) => <th key={m} style={{ padding: "4px 6px", fontWeight: 600 }}>{m}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {teams.map((t) => {
+                const agg = teamAgg(t);
+                const open = openRop === t.rop;
+                const orderFact = agg.fact[4];
+                return (
+                  <FragmentRows key={t.rop}>
+                    <tr onClick={() => setOpenRop(open ? null : t.rop)}
+                      style={{ borderTop: `2px solid ${C.line}`, cursor: "pointer", background: open ? "#FBFCFB" : "transparent" }}>
+                      <td style={{ padding: "10px 6px", fontWeight: 800 }}>
+                        <span style={{ color: C.grey, marginRight: 6 }}>{open ? "▾" : "▸"}</span>
+                        {t.rop}
+                        <div style={{ fontSize: 10, fontWeight: 600, color: C.grey, marginLeft: 18 }}>
+                          {t.mops.length} МОП · премия: {t.premiumBase} ≈ {(orderFact * 12).toLocaleString("ru-RU")} ₽
+                        </div>
+                      </td>
+                      {METRICS.map((_, i) => <PctCell key={i} fact={agg.fact[i]} plan={agg.plan[i]} />)}
+                    </tr>
+                    {open && t.mops.map((m) => (
+                      <tr key={m.name} style={{ borderTop: `1px solid ${C.line}`, background: "#FBFCFB" }}>
+                        <td style={{ padding: "7px 6px 7px 28px", fontWeight: 600 }}>
+                          {m.name}
+                          <span onClick={() => window.__nav && window.__nav("mop")} style={{ fontSize: 10, color: C.bot, marginLeft: 8, cursor: "pointer", fontWeight: 700 }}>профиль →</span>
+                        </td>
+                        {METRICS.map((_, i) => <PctCell key={i} fact={m.fact[i]} plan={m.plan[i]} />)}
+                      </tr>
+                    ))}
+                  </FragmentRows>
+                );
+              })}
+              <tr style={{ borderTop: `2px solid ${C.ink}` }}>
+                <td style={{ padding: "10px 6px", fontWeight: 800 }}>Компания</td>
+                {METRICS.map((_, i) => <PctCell key={i} fact={company.fact[i]} plan={company.plan[i]} />)}
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11, color: C.grey, marginTop: 10 }}>
+            «Профиль →» ведёт на дашборд МОПа (экран в) и отчёт по его клиентам: категория · план контактов · факт.
+          </div>
+        </Card>
+
+        {/* Правая колонка */}
+        <div style={{ display: "grid", gap: 12 }}>
+          <Card style={{ background: C.redSoft, border: "1px solid #F0CFC6" }}>
+            <SectionTitle right={<Badge bg="#fff" color={C.red}>{alerts.filter((a) => a.level === "red").length} критич.</Badge>}>
+              Критические отклонения
+            </SectionTitle>
+            {alerts.map((a, i) => (
+              <div key={i} style={{ padding: "8px 0", borderTop: i ? "1px solid #F0CFC6" : "none" }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 4, background: a.level === "red" ? C.red : C.amber, flexShrink: 0 }} />
+                  <span style={{ fontWeight: 800, fontSize: 12 }}>{a.who}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.ink, marginTop: 2, lineHeight: 1.45 }}>{a.text}</div>
+                <div style={{ fontSize: 11, color: C.bot, fontWeight: 700, marginTop: 3, cursor: "pointer" }}>{a.action} →</div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+              Эти же уведомления приходят РОПу в Telegram после прогона бота.
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle right={<span style={{ fontSize: 11, color: C.grey }}>191 сделка</span>}>
+              Жизненный цикл базы · стадии бота
+            </SectionTitle>
+            <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", marginBottom: 10 }}>
+              {lifecycle.map((s) => (
+                <div key={s.stage} style={{ width: `${(s.n / 191) * 100}%`, background: s.color }} title={`${s.stage}: ${s.n}`} />
+              ))}
+            </div>
+            {lifecycle.map((s, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 12 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color }} />
+                  {s.stage}
+                </span>
+                <b>{s.n} · {Math.round((s.n / 191) * 100)}%</b>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+              Стадии двигает бот по данным заказов. «Снижение» + «нет заказов 30» = зона риска, цель — конверсия в «реактивацию».
+            </div>
+          </Card>
+
+          <Card style={{ background: C.botSoft, border: "1px solid #D5DAF7" }}>
+            <SectionTitle>Бот за неделю · вся база</SectionTitle>
+            {[
+              ["Email-касаний", "84", "open 41% · click 12%"],
+              ["Push-уведомлений", "63", "доставлено 96%"],
+              ["Эскалаций МОПам", "11", "9 закрыто, 2 просрочено"],
+              ["Реактивировано клиентов", "3", "заказ после win-back"],
+            ].map(([l, v, s], i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0", borderTop: i ? "1px solid #D5DAF7" : "none" }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{l}</span>
+                <span style={{ textAlign: "right" }}>
+                  <b style={{ color: C.bot, fontSize: 15 }}>{v}</b>
+                  <div style={{ fontSize: 10, color: C.inkSoft }}>{s}</div>
+                </span>
+              </div>
+            ))}
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// React.Fragment не принимает key в map без обёртки — маленький хелпер
+const FragmentRows = ({ children }) => <>{children}</>;
+
+return FarmhubCrmRopDash;
+})();
+
+const Screen_admin = (() => {
+const { useState } = React;
+// ─────────────────────────────────────────────────────────────
+// ФармХаб CRM — Экран (д): Админка
+// 3 вкладки: Категории и частоты · Премиальный алгоритм · Маршрутизация бот/МОП
+// Всё редактируемо (мок, без сохранения на бэкенд).
+// ─────────────────────────────────────────────────────────────
+
+const C = {
+  bg: "#F6F7F5", surface: "#FFFFFF", ink: "#1C2420", inkSoft: "#5B6660",
+  line: "#E3E7E2", green: "#0E6B5C", greenSoft: "#E3F0ED",
+  bot: "#4B5AE4", botSoft: "#EAEDFC", red: "#C8442C", redSoft: "#FAE9E5",
+  amber: "#B7791F", amberSoft: "#FBF1DF", grey: "#8A948E",
+};
+
+const Card = ({ children, style }) => (
+  <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, ...style }}>{children}</div>
+);
+const SectionTitle = ({ children, right }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.inkSoft }}>{children}</div>
+    {right}
+  </div>
+);
+const Badge = ({ children, color, bg }) => (
+  <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{children}</span>
+);
+const Num = ({ value, onChange, w = 64, suffix }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))}
+      style={{ width: w, border: `1px solid ${C.line}`, borderRadius: 6, padding: "5px 7px", fontSize: 13, fontWeight: 700, fontFamily: "inherit", textAlign: "right" }} />
+    {suffix && <span style={{ fontSize: 11, color: C.grey }}>{suffix}</span>}
+  </span>
+);
+
+// ── Вкладка 1: категории ──────────────────────────────────────
+const initialCats = {
+  // частота контактов, дней между контактами, по матрице оборот×вовлечённость
+  freq: {
+    A1: 21, A2: 21, A3: 28,
+    B1: 35, B2: 35, B3: 45,
+    C1: 60, C2: 60, C3: 75,
+    D1: 90, D2: 90, D3: 120,
+  },
+  // пороги авторасчёта
+  turnover: { A: 300, B: 120, C: 40 }, // тыс. ₽/мес — нижняя граница буквы
+  jitter: 3,
+};
+
+// ── Вкладка 2: премия ─────────────────────────────────────────
+const initialPremium = {
+  month: "Июнь",
+  prices: [
+    { name: "Контакт с собственником", v: 300, kind: "₽/ед." },
+    { name: "Контакт с заведующей", v: 200, kind: "₽/ед." },
+    { name: "Эксклюзивное ДС (за аптеку)", v: 1500, kind: "₽/ед." },
+    { name: "Регистрация зав в ФА", v: 800, kind: "₽/ед." },
+    { name: "Объём заказа", v: 1, kind: "% от суммы" },
+    { name: "РОП: от заказа команды", v: 1.2, kind: "% от суммы" },
+  ],
+  tiers: [
+    { from: 0, to: 50, k: 0 },
+    { from: 50, to: 70, k: 0.3 },
+    { from: 70, to: 100, k: 0.7 },
+    { from: 100, to: 120, k: 1 },
+    { from: 120, to: 999, k: 1.2 },
+  ],
+};
+
+// ── Вкладка 3: маршрутизация ─────────────────────────────────
+const initialRouting = {
+  matrix: [
+    { cat: "A", mop: "Личный цикл МОПа", bot: "Подогрев между визитами: акции, напоминания", channel: "Звонок" },
+    { cat: "B", mop: "Личный цикл МОПа", bot: "Подогрев + reorder-напоминания", channel: "Звонок" },
+    { cat: "C", mop: "По триггеру (эскалация)", bot: "Ведёт сам: email + push, цикл касаний", channel: "WhatsApp" },
+    { cat: "D", mop: "По триггеру (эскалация)", bot: "Ведёт сам: редкие email-касания", channel: "E-mail" },
+  ],
+  limits: {
+    emailDays: 7, escalateAfter: 3, maxTasksDay: 20, reactionWaitH: 72,
+  },
+  stageRules: [
+    { stage: "Снижение", rule: "Бот: reorder-письмо → push → при молчании эскалация МОПу" },
+    { stage: "Нет заказов 30", rule: "Бот: win-back (Claude API для топ-клиентов A/B) → реакция = эскалация" },
+    { stage: "Реактивация", rule: "МОП ведёт лично до 2 заказов подряд, бот не пишет" },
+    { stage: "Потерян", rule: "Бот не пишет. Раз в квартал — ручной решение РОПа" },
+  ],
+};
+
+function FarmhubCrmAdmin() {
+  const [tab, setTab] = useState("cats");
+  const [cats, setCats] = useState(initialCats);
+  const [prem, setPrem] = useState(initialPremium);
+  const [routing, setRouting] = useState(initialRouting);
+
+  const tabs = [
+    ["cats", "Категории и частоты"],
+    ["prem", "Премиальный алгоритм"],
+    ["route", "Маршрутизация бот / МОП"],
+  ];
+
+  return (
+    <div style={{ fontFamily: "'Manrope','Inter',system-ui,sans-serif", background: C.bg, minHeight: "100vh", color: C.ink, fontSize: 13 }}>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, padding: "14px 22px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 19, fontWeight: 800 }}>Настройки CRM</div>
+          <div style={{ color: C.inkSoft, marginTop: 3 }}>Роль: администратор · изменения версионируются, история правок сохраняется</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+          {tabs.map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)}
+              style={{
+                border: `1px solid ${tab === k ? C.green : C.line}`, background: tab === k ? C.green : C.surface,
+                color: tab === k ? "#fff" : C.ink, borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: 14, display: "grid", gap: 14, maxWidth: 1060 }}>
+        {/* ── ВКЛАДКА: КАТЕГОРИИ ── */}
+        {tab === "cats" && (
+          <>
+            <Card>
+              <SectionTitle right={<Badge bg={C.greenSoft} color={C.green}>авторасчёт ежеквартально</Badge>}>
+                Матрица категорий: оборот × вовлечённость → частота контактов (дней между контактами)
+              </SectionTitle>
+              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                <thead>
+                  <tr style={{ fontSize: 11, color: C.inkSoft }}>
+                    <th style={{ textAlign: "left", padding: 6, fontWeight: 600 }}>Оборот \ Вовлечённость</th>
+                    {["1 · высокая", "2 · средняя", "3 · низкая/нет"].map((h) => (
+                      <th key={h} style={{ padding: 6, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {["A", "B", "C", "D"].map((L) => (
+                    <tr key={L} style={{ borderTop: `1px solid ${C.line}` }}>
+                      <td style={{ padding: 6, fontWeight: 800 }}>
+                        {L}
+                        <span style={{ fontSize: 10, color: C.grey, marginLeft: 6 }}>
+                          {L === "D" ? "ниже C или не определён" : `от ${cats.turnover[L]} т.₽/мес`}
+                        </span>
+                      </td>
+                      {[1, 2, 3].map((n) => {
+                        const key = `${L}${n}`;
+                        return (
+                          <td key={key} style={{ padding: 6, textAlign: "center" }}>
+                            <Num value={cats.freq[key]} suffix="дн."
+                              onChange={(v) => setCats((p) => ({ ...p, freq: { ...p.freq, [key]: v } }))} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: "flex", gap: 18, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12 }}>
+                  Допуск интервала: ±<Num value={cats.jitter} w={44} suffix="дн." onChange={(v) => setCats((p) => ({ ...p, jitter: v }))} />
+                </span>
+                <span style={{ fontSize: 11, color: C.grey }}>
+                  Планировщик: сначала высокие категории, равномерная разбивка по рабочим дням квартала.
+                </span>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle>Пороги авторасчёта буквы (оборот, тыс. ₽/мес)</SectionTitle>
+              <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
+                {["A", "B", "C"].map((L) => (
+                  <span key={L} style={{ fontSize: 13, fontWeight: 700 }}>
+                    {L}: от <Num value={cats.turnover[L]} onChange={(v) => setCats((p) => ({ ...p, turnover: { ...p.turnover, [L]: v } }))} />
+                  </span>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.grey, marginTop: 10 }}>
+                Цифра вовлечённости считается ботом: доля подключённых акций, наличие заказов через МФ, регистрации в ФА, реакция на касания.
+                Смена категории клиента — событие в ленте: и МОП, и бот меняют режим работы.
+              </div>
+            </Card>
+          </>
+        )}
+
+        {/* ── ВКЛАДКА: ПРЕМИЯ ── */}
+        {tab === "prem" && (
+          <>
+            <Card>
+              <SectionTitle
+                right={
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <Badge bg={C.amberSoft} color={C.amber}>действует: {prem.month}</Badge>
+                    <button style={{ border: `1px solid ${C.line}`, background: C.surface, borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                      Копировать на июль
+                    </button>
+                  </div>
+                }>
+                Цены единиц активности — алгоритм месяца
+              </SectionTitle>
+              {prem.prices.map((p, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                  <span style={{ fontWeight: 600 }}>{p.name}</span>
+                  <span>
+                    <Num value={p.v} suffix={p.kind}
+                      onChange={(v) => setPrem((pr) => ({ ...pr, prices: pr.prices.map((x, j) => (j === i ? { ...x, v } : x)) }))} />
+                  </span>
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: C.grey, marginTop: 10 }}>
+                В разные месяцы квартала алгоритм может отличаться — например, в последний месяц поднять цену регистраций для рывка.
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle>Шкала коэффициентов выполнения</SectionTitle>
+              <table style={{ borderCollapse: "collapse" }}>
+                <tbody>
+                  {prem.tiers.map((t, i) => (
+                    <tr key={i} style={{ borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                      <td style={{ padding: "7px 14px 7px 0", color: C.inkSoft, fontSize: 12 }}>
+                        от <Num value={t.from} w={54} suffix="%"
+                          onChange={(v) => setPrem((p) => ({ ...p, tiers: p.tiers.map((x, j) => (j === i ? { ...x, from: v } : x)) }))} />
+                        {" "}до <Num value={t.to} w={54} suffix="%"
+                          onChange={(v) => setPrem((p) => ({ ...p, tiers: p.tiers.map((x, j) => (j === i ? { ...x, to: v } : x)) }))} />
+                      </td>
+                      <td style={{ padding: "7px 0", fontWeight: 800 }}>
+                        k = <Num value={t.k} w={54}
+                          onChange={(v) => setPrem((p) => ({ ...p, tiers: p.tiers.map((x, j) => (j === i ? { ...x, k: v } : x)) }))} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          </>
+        )}
+
+        {/* ── ВКЛАДКА: МАРШРУТИЗАЦИЯ ── */}
+        {tab === "route" && (
+          <>
+            <Card>
+              <SectionTitle>Кто ведёт клиента: категория → роли бота и МОПа</SectionTitle>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ fontSize: 11, color: C.inkSoft, textAlign: "left" }}>
+                    <th style={{ padding: 6, fontWeight: 600 }}>Кат.</th>
+                    <th style={{ padding: 6, fontWeight: 600 }}>МОП</th>
+                    <th style={{ padding: 6, fontWeight: 600 }}>Бот</th>
+                    <th style={{ padding: 6, fontWeight: 600 }}>Канал цикла</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {routing.matrix.map((r, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${C.line}` }}>
+                      <td style={{ padding: 8, fontWeight: 800 }}>{r.cat}</td>
+                      <td style={{ padding: 8 }}>{r.mop}</td>
+                      <td style={{ padding: 8, color: C.bot, fontWeight: 600 }}>{r.bot}</td>
+                      <td style={{ padding: 8 }}>
+                        <select value={r.channel}
+                          onChange={(e) => setRouting((p) => ({ ...p, matrix: p.matrix.map((x, j) => (j === i ? { ...x, channel: e.target.value } : x)) }))}
+                          style={{ border: `1px solid ${C.line}`, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 700, fontFamily: "inherit" }}>
+                          {["Звонок", "WhatsApp", "E-mail"].map((c) => <option key={c}>{c}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ fontSize: 11, color: C.grey, marginTop: 8 }}>
+                Поверх матрицы: эскалации и алармы — всегда звонок; повтор невыполненного — канал на ступень выше прошлого.
+              </div>
+            </Card>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <Card style={{ background: C.botSoft, border: "1px solid #D5DAF7" }}>
+                <SectionTitle>Лимиты бота · антиспам</SectionTitle>
+                {[
+                  ["Мин. дней между email одному клиенту", "emailDays", "дн."],
+                  ["Эскалация МОПу после касаний без реакции", "escalateAfter", "кас."],
+                  ["Ожидание реакции до следующего касания", "reactionWaitH", "ч."],
+                  ["Лимит задач МОПам на команду в день", "maxTasksDay", "шт."],
+                ].map(([l, key, suf], i) => (
+                  <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderTop: i ? "1px solid #D5DAF7" : "none" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, maxWidth: 220 }}>{l}</span>
+                    <Num value={routing.limits[key]} suffix={suf}
+                      onChange={(v) => setRouting((p) => ({ ...p, limits: { ...p.limits, [key]: v } }))} />
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>
+                  Жёсткие правила (не настраиваются): не писать при ожидании реакции; не писать «потерянным»; письма от лица закреплённого МОПа; задача — всегда своему МОПу.
+                </div>
+              </Card>
+
+              <Card>
+                <SectionTitle>Правила по стадиям жизненного цикла</SectionTitle>
+                {routing.stageRules.map((s, i) => (
+                  <div key={i} style={{ padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                    <Badge bg="#F0F2EF" color={C.inkSoft}>{s.stage}</Badge>
+                    <div style={{ fontSize: 12, marginTop: 4, lineHeight: 1.45 }}>{s.rule}</div>
+                  </div>
+                ))}
+              </Card>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+return FarmhubCrmAdmin;
+})();
+
+const NAV = [{"key": "day", "title": "Мой день", "role": "МОП"}, {"key": "visit", "title": "Карточка · Визит", "role": "МОП"}, {"key": "mop", "title": "Моя премия", "role": "МОП"}, {"key": "rop", "title": "Отдел продаж", "role": "РОП / Директор"}, {"key": "admin", "title": "Настройки", "role": "Админ"}];
+
+function App() {
+  const { useState, useEffect } = React;
+  const [screen, setScreen] = useState("day");
+  useEffect(() => { window.__nav = (k) => { setScreen(k); window.scrollTo(0, 0); }; }, []);
+  const Cur = { day: Screen_day, visit: Screen_visit, mop: Screen_mop, rop: Screen_rop, admin: Screen_admin }[screen];
+  return (
+    <div>
+      <div style={{ background: "#1C2420", padding: "10px 22px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: 14, letterSpacing: "0.02em" }}>
+          ФармХаб CRM <span style={{ color: "#7CC1B3", fontWeight: 700 }}>· мок для согласования</span>
+        </div>
+        <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
+          {NAV.map((n) => (
+            <button key={n.key} onClick={() => { setScreen(n.key); window.scrollTo(0,0); }}
+              style={{
+                border: "none", borderRadius: 7, padding: "7px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                background: screen === n.key ? "#0E6B5C" : "rgba(255,255,255,0.08)",
+                color: screen === n.key ? "#fff" : "#C9D2CD",
+              }}>
+              {n.title}
+              <span style={{ display: "block", fontSize: 9, fontWeight: 600, opacity: 0.65 }}>{n.role}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <Cur />
+      <div style={{ textAlign: "center", padding: "18px 0 26px", color: "#8A948E", fontSize: 11, background: "#F6F7F5" }}>
+        Данные тестовые. Кликабельно: очередь дня → форма визита · дашборд отдела → профиль МОПа · симулятор премии · вкладки админки.
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>
